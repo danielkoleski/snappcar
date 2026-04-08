@@ -481,10 +481,26 @@ as a potential attack surface.
   account creation.
 - The app collects: name, email, vehicle plate, odometer readings, invoice photos, and
   location (future). Each data category must be disclosed in the privacy policy.
-- Provide a "Delete my account" flow in Profile → Settings that removes all user data
-  from `profiles`, `vehicles`, `mileage_entries`, `maintenance_records`, `invoices`,
-  `invoice_items`, and Supabase Storage. Implement as a Postgres function called via RPC
-  to ensure atomicity.
+- Provide a "Delete my account" flow in Profile → Settings. Implement as a Postgres
+  function called via RPC to ensure atomicity. The deletion follows a two-tier strategy:
+
+  **Hard delete (removed entirely):**
+  - `profiles` row (name, avatar)
+  - `auth.users` entry (email, password hash)
+  - All files in Supabase Storage (`invoices/`, `vehicle-photos/`)
+  - `invoices` and `invoice_items` rows (contain NF-e data and OCR text)
+  - `device_tokens` (FCM tokens)
+
+  **Anonymised and retained** (aggregate/historical value; no longer linkable to the user):
+  - `vehicles` — `owner_id` set to `null`, `plate` set to `null`, `photo_url` deleted.
+    Make, model, year, color, and `fipe_code` are kept.
+  - `mileage_entries` — `vehicle_id` FK kept (still linked to the now-anonymous vehicle);
+    no personal fields to clear.
+  - `maintenance_records` — `vehicle_id` FK kept; `workshop_name` and `cost_brl` cleared
+    (set to `null`) as they may indirectly identify the user; title and dates retained.
+
+  The RPC function must run with `SECURITY DEFINER` and be owned by a superuser role so
+  it can write to `auth.users`. Document this clearly in the migration that creates it.
 - Data is stored in Supabase's managed infrastructure. Confirm the selected Supabase
   region (prefer `sa-east-1` — São Paulo) to keep data within Brazilian territory where
   possible.
