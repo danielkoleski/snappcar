@@ -1,0 +1,95 @@
+name: snappcar
+description: Controle de manutenção veicular com histórico, lembretes e análise de notas fiscais por IA.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^13.2.0
+
+  # Backend
+  supabase_flutter: ^2.5.3
+
+  # Firebase
+  firebase_core: ^3.3.0
+  firebase_messaging: ^15.1.0
+
+  # Notifications
+  flutter_local_notifications: ^17.2.2
+
+  # Image
+  image_picker: ^1.1.2
+  cached_network_image: ^3.3.1
+
+  # Forms
+  reactive_forms: ^17.0.1
+
+  # Models
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # Environment
+  flutter_dotenv: ^5.1.0
+
+  # Secure storage
+  flutter_secure_storage: ^9.2.2
+
+  # Internationalisation
+  intl: ^0.19.0
+
+  # Charts
+  fl_chart: ^0.68.0
+
+  # Utils
+  uuid: ^4.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Analysis
+  very_good_analysis: ^6.0.0
+
+  # Code generation
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  riverpod_generator: ^2.4.3
+  build_runner: ^2.4.12
+  flutter_gen_runner: ^5.4.0
+
+  # Testing
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+
+  generate: true
+
+  assets:
+    - .env
+    - assets/images/
+    - assets/icons/
+    - assets/fonts/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

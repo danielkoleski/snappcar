@@ -1,0 +1,17 @@
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "lib/l10n/app_localizations*.dart"
+
+linter:
+  rules:
+    # Allow print in development; remove for production
+    avoid_print: true
+    # Enforce const constructors
+    prefer_const_constructors: true
+    prefer_const_literals_to_create_immutables: true
+    # Enforce explicit types (no dynamic)
+    avoid_dynamic_calls: true
