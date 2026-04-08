@@ -379,6 +379,118 @@ and provided via CI secrets.
 
 ---
 
+## Security
+
+Security is a first-class concern. The app stores personal vehicle data, invoice photos,
+and vehicle plates — all of which are sensitive. Every layer of the stack must be treated
+as a potential attack surface.
+
+### Authentication
+- **Supabase Auth is the only identity provider.** Never implement custom session logic.
+- JWTs are managed by the Supabase SDK; never store them in plain `SharedPreferences` —
+  use `flutter_secure_storage` for any token that must be persisted locally.
+- **Session expiry**: configure Supabase to use short-lived JWTs (1 hour) with refresh
+  tokens. The SDK handles refresh automatically; do not disable this.
+- **Google OAuth**: validate the `id_token` server-side via Supabase Auth — never trust
+  the raw token returned by the Google Sign-In plugin without server verification.
+- **Password policy**: enforce minimum 8 characters with at least one number and one
+  special character at the form-validation layer (`reactive_forms`). Supabase enforces
+  its own server-side policy as a second line of defence.
+- **Rate limiting**: Supabase Auth has built-in rate limiting on `/auth/v1/token` and
+  `/auth/v1/signup`. Do not expose the service role key on the client — it bypasses all
+  rate limits and RLS.
+- After a successful login, always call `supabase.auth.currentSession` to verify the
+  session is active before navigating to protected routes. Use a `go_router` redirect
+  guard tied to a Riverpod auth state provider.
+
+### Data Access — Row-Level Security (RLS)
+- **Every table that holds user data must have RLS enabled and at least one policy.**
+  A table with RLS enabled but no policies denies all access — verify this is intentional
+  for read-only seed tables like `maintenance_templates`.
+- Never use the `service_role` key inside the Flutter app. It is only allowed inside
+  Edge Functions running in a trusted server environment.
+- Policies must cover all four operations explicitly: `SELECT`, `INSERT`, `UPDATE`,
+  `DELETE`. Do not rely on a catch-all policy unless you have consciously reviewed it.
+- After writing a new migration, add a test in `test/unit/` that verifies the RLS
+  policies reject cross-user access.
+
+### Storage Security
+- Supabase Storage buckets for user content (`invoices`, `vehicle-photos`) must be
+  **private** (not public). Always generate signed URLs server-side with short expiry
+  (≤ 60 minutes) when the app needs to display an image.
+- Storage policies must mirror the RLS pattern: only the owning user can upload, read,
+  or delete their own files. Example:
+  ```sql
+  -- Only the owner can upload to their invoices folder
+  CREATE POLICY "owner_upload" ON storage.objects
+    FOR INSERT WITH CHECK (
+      bucket_id = 'invoices' AND
+      (storage.foldername(name))[1] = auth.uid()::text
+    );
+  ```
+- Never construct a storage path using user-supplied strings without sanitising them.
+  Always use `auth.uid()` as the top-level folder to prevent path traversal.
+
+### Edge Functions
+- Always verify the caller's JWT at the start of every Edge Function:
+  ```typescript
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  const { data: { user }, error } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+  if (error || !user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  ```
+- Functions triggered by Supabase webhooks (storage events) must validate the
+  `x-supabase-webhook-secret` header against a secret stored in `Deno.env.get()`.
+- Never log full request bodies — they may contain file data or PII.
+- Secrets (`OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) are set via
+  `supabase secrets set` and accessed with `Deno.env.get()`. They are never committed
+  to source control.
+
+### Transport & API
+- All communication with Supabase and external APIs (OpenAI, FIPE) must be over HTTPS.
+  The Supabase and Dio clients enforce this by default — never downgrade to HTTP.
+- The FIPE API is public and unauthenticated; treat its responses as untrusted input.
+  Validate and sanitise all fields before writing to the database.
+- Do not proxy raw AI responses to the client. The Edge Function must parse the AI output
+  and return only the structured `invoice_items` data.
+
+### Secrets & Environment
+- `.env` is **gitignored**. CI/CD secrets are injected via GitHub Actions secrets and
+  `supabase secrets set`. Never hardcode any key, URL, or credential in source code.
+- Rotate keys immediately if accidentally committed. Add a pre-commit hook (or
+  `gitleaks` in CI) to scan for leaked secrets on every push.
+- The `SUPABASE_ANON_KEY` is intentionally public (safe to ship in the app) but the
+  `SUPABASE_SERVICE_ROLE_KEY` must never leave the server environment.
+
+### Mobile-Specific
+- Enable **certificate pinning** before production launch to prevent MITM attacks on
+  rooted/jailbroken devices. Use the `http_certificate_pinning` package or configure
+  it at the network layer.
+- Do not store sensitive data (tokens, vehicle plates, personal info) in plain
+  `SharedPreferences`. Use `flutter_secure_storage` which maps to Keychain (iOS) and
+  Android Keystore.
+- Request only the permissions the current screen needs (camera, storage). Do not
+  request all permissions at app launch.
+- Obfuscate Dart code in release builds:
+  ```bash
+  flutter build apk --obfuscate --split-debug-info=build/debug-info
+  ```
+
+### LGPD Compliance (Brazilian Data Protection Law)
+- Display a clear privacy policy on first launch and require explicit acceptance before
+  account creation.
+- The app collects: name, email, vehicle plate, odometer readings, invoice photos, and
+  location (future). Each data category must be disclosed in the privacy policy.
+- Provide a "Delete my account" flow in Profile → Settings that removes all user data
+  from `profiles`, `vehicles`, `mileage_entries`, `maintenance_records`, `invoices`,
+  `invoice_items`, and Supabase Storage. Implement as a Postgres function called via RPC
+  to ensure atomicity.
+- Data is stored in Supabase's managed infrastructure. Confirm the selected Supabase
+  region (prefer `sa-east-1` — São Paulo) to keep data within Brazilian territory where
+  possible.
+
+---
+
 ## AI Assistant Guidelines
 
 When working in this codebase:
